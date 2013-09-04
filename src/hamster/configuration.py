@@ -177,6 +177,9 @@ class GConfStore(gobject.GObject, Singleton):
         'standalone_window_maximized' :   False,       # Is overview window maximized
         'activities_source'           :   "",          # Source of TODO items ("", "evo", "gtg")
         'last_report_folder'          :   "~",         # Path to directory where the last report was saved
+        'redmine_integration_enabled' :   False,       # Redmine integration
+        'redmine_url'                 :   "",           # Redmine URL
+        'redmine_api_key'             :   ""          # Redmine API key
     }
 
     __gsignals__ = {

@@ -24,6 +24,7 @@ pygtk.require('2.0')
 import os
 import gobject
 import gtk
+import redmine
 
 import datetime as dt
 
@@ -253,7 +254,13 @@ class PreferencesEditor(gtk.Object):
             ])
         else:
             self.get_widget("workspace_tab").hide()
-
+            
+        # Redmine configuration
+        self.get_widget("notebook1").connect("switch-page", self.on_notebook_page_switch)
+        self.get_widget("redmine_enabled").connect("toggled", self.on_redmine_integration_checkbox_toggled)
+        self.get_widget("redmine_test_button").connect("clicked", self.on_test_connection_button_click)
+        self.get_widget("redmine_save_button").connect("clicked", self.on_save_configuration_button_click)
+        
 
         self._gui.connect_signals(self)
         self.show()
@@ -760,3 +767,60 @@ class PreferencesEditor(gtk.Object):
 
     def on_preferences_window_destroy(self, window):
         self.window = None
+        
+    # Redmine callbacks
+    
+    def on_redmine_integration_checkbox_toggled(self, checkbox):
+      conf.set("redmine_integration_enabled", checkbox.get_active())
+      if checkbox.get_active():
+        self.get_widget("redmine_url_label").set_sensitive(True)
+        self.get_widget("redmine_url_entry").set_sensitive(True)
+        self.get_widget("api_key_label").set_sensitive(True)
+        self.get_widget("api_key_entry").set_sensitive(True)
+        self.get_widget("redmine_test_button").set_sensitive(True)
+        self.get_widget("redmine_save_button").set_sensitive(True)
+      else:
+        self.get_widget("redmine_url_label").set_sensitive(False)
+        self.get_widget("redmine_url_entry").set_sensitive(False)
+        self.get_widget("api_key_label").set_sensitive(False)
+        self.get_widget("api_key_entry").set_sensitive(False)
+        self.get_widget("redmine_test_button").set_sensitive(False)
+        self.get_widget("redmine_save_button").set_sensitive(False)
+      
+    def on_notebook_page_switch(self, notebook, page, page_num):
+      numpages = notebook.get_n_pages()
+      if page_num == numpages-1:
+        redmine_active = conf.get("redmine_integration_enabled", False)
+        checkbox = self.get_widget("redmine_enabled")
+        if redmine_active:
+          checkbox.set_active(True)
+          self.get_widget("redmine_url_entry").set_text(conf.get("redmine_url"))
+          if self.get_widget("redmine_url_entry").get_text() == "":
+            self.get_widget("redmine_url_entry").set_text("http://")
+          self.get_widget("api_key_entry").set_text(conf.get("redmine_api_key"))
+        else:
+          checkbox.set_active(False)
+          self.get_widget("redmine_url_entry").set_text(conf.get("redmine_url"))
+          if self.get_widget("redmine_url_entry").get_text() == "":
+            self.get_widget("redmine_url_entry").set_text("http://")
+          self.get_widget("api_key_entry").set_text(conf.get("redmine_api_key"))
+          
+    def on_save_configuration_button_click(self, button):
+      conf.set("redmine_url", self.get_widget("redmine_url_entry").get_text())
+      conf.set("redmine_api_key", self.get_widget("api_key_entry").get_text())
+      
+    def on_test_connection_button_click(self, button):
+      redmine_url = self.get_widget("redmine_url_entry").get_text()
+      redmine_api_key = self.get_widget("api_key_entry").get_text()
+      redcon = redmine.RedmineConnector(redmine_url, redmine_api_key)
+      dialog = gtk.Dialog("Connection test result", self.window, gtk.DIALOG_MODAL, (gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
+      if redcon.check_connection():
+        label = gtk.Label("Connection test succeeded!")
+        dialog.vbox.pack_start(label)
+        label.show()
+      else:
+        label = gtk.Label("Connection test failed!")
+        dialog.vbox.pack_start(label)
+        label.show()
+      dialog.run()
+      dialog.destroy()
