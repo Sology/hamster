@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2013 Piotr Żurek <piotr at sology dot eu> for Sology
+# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology
 
 # This file contains Redmine Integration specific functions for Project Hamster
 

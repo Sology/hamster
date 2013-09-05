@@ -3,6 +3,7 @@
 
 # Copyright (C) 2009-2012 Toms Bauģis <toms.baugis at gmail.com>
 # Copyright (C) 2009 Patryk Zawadzki <patrys at pld-linux.org>
+# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology (Redmine Integration)
 
 # This file is part of Project Hamster.
 
@@ -26,6 +27,7 @@ import gtk, gobject
 import glib
 import dbus, dbus.service, dbus.mainloop.glib
 import locale
+import redmine
 
 
 from hamster.configuration import runtime, dialogs, conf, load_ui_file
@@ -171,6 +173,17 @@ class DailyView(object):
             self.window.add_accel_group(self.accel_group)
 
             self._gui.connect_signals(self)
+            
+            # Signal for Redmine issue combo
+            self.get_widget("issue_combo").connect("changed", self.on_redmine_issue_combo_change)
+            
+            # Redmine combos additional setup
+            cell = gtk.CellRendererText()
+            self.get_widget("issue_combo").pack_start(cell, True)
+            self.get_widget("issue_combo").add_attribute(cell, 'text',0)
+            cell = gtk.CellRendererText()
+            self.get_widget("time_activity_combo").pack_start(cell, True)
+            self.get_widget("time_activity_combo").add_attribute(cell, 'text',0)
 
     def reposition_hamster_window(self):
         if not self.window:
@@ -261,6 +274,10 @@ class DailyView(object):
 
             total_string = ", ".join(total_strings)
             self._gui.get_object("fact_totals").set_text(total_string)
+        
+        # Before setting last activity make sure that Redmine stuff is visible only if the integration is enabled (i. e. hide the widgets now and leave the rest to the code in set_last_activity())
+        self.get_widget("redmine_frame").hide()
+        
 
         self.set_last_activity()
 
@@ -274,6 +291,12 @@ class DailyView(object):
         if activity:
             self.get_widget("switch_activity").show()
             self.get_widget("start_tracking").hide()
+            
+            # If the Redmine integration is enabled, show the Redmine frame and set insensitivity of combos
+            if conf.get("redmine_integration_enabled"):
+              self.get_widget("redmine_frame").show()
+              self.get_widget("issue_combo").set_sensitive(False)
+              self.get_widget("activity_combo").set_sensitive(False)
 
             delta = dt.datetime.now() - activity.start_time
             duration = delta.seconds /  60
@@ -297,6 +320,16 @@ class DailyView(object):
             self.get_widget("activity_info_box").hide()
 
             self.tag_box.draw([])
+            
+            # If the Redmine integration is enabled, show the Redmine frame and set up the combos (if there is no selection), making sure they are sensitive
+            if conf.get("redmine_integration_enabled"):
+              self.get_widget("redmine_frame").show()
+              self.get_widget("issue_combo").set_sensitive(True)
+              self.get_widget("time_activity_combo").set_sensitive(True)
+              if self.get_widget("issue_combo").get_active() == -1 or self.get_widget("issue_combo").get_active() == 0:
+                self.fill_issues_combo()
+              if self.get_widget("time_activity_combo").get_active() == -1 or self.get_widget("time_activity_combo").get_active() == 0:
+                self.fill_time_activities_combo()
 
 
     def delete_selected(self):
@@ -507,3 +540,70 @@ class DailyView(object):
         activity = self.get_widget("last_activity_name").get_text()
         self.statusicon.set_tooltip(activity)
         self.statusicon.set_visible(True)
+        
+    # Redmine functions
+    def fill_issues_combo(self):
+      combomodel = self.get_widget("issue_combo").get_model()
+      if combomodel == None:
+        combomodel = gtk.ListStore(gobject.TYPE_STRING)
+      combomodel.clear()
+      self.get_widget("issue_combo").set_model(None) # Optimizes operations
+      if conf.get("redmine_integration_enabled"):
+        redmine_url = conf.get("redmine_url")
+        redmine_api_key = conf.get("redmine_api_key")
+        redcon = redmine.RedmineConnector(redmine_url, redmine_api_key)
+        issues = redcon.get_issues()
+        combomodel.append(["None"])
+        for issue in issues['issues']:
+          combomodel.append([issue["subject"]])
+      else:
+        combomodel = None
+      self.get_widget("issue_combo").set_model(combomodel)
+      self.get_widget("issue_combo").set_active(0)
+            
+    def fill_time_activities_combo(self):
+      combomodel = self.get_widget("time_activity_combo").get_model()
+      if combomodel == None:
+        combomodel = gtk.ListStore(gobject.TYPE_STRING)
+      combomodel.clear()
+      self.get_widget("time_activity_combo").set_model(None) # Optimizes operations
+      if conf.get("redmine_integration_enabled"):
+        redmine_url = conf.get("redmine_url")
+        redmine_api_key = conf.get("redmine_api_key")
+        redcon = redmine.RedmineConnector(redmine_url, redmine_api_key)
+        activities = redcon.get_activities()
+        for activity in activities['time_entry_activities']:
+          combomodel.append([activity["name"]])
+      else:
+        combomodel = None
+      self.get_widget("time_activity_combo").set_model(combomodel)
+    
+    def get_activity_id(self, name):
+      if conf.get("redmine_integration_enabled"):
+        redmine_url = conf.get("redmine_url")
+        redmine_api_key = conf.get("redmine_api_key")
+        redcon = redmine.RedmineConnector(redmine_url, redmine_api_key)
+        activities = redcon.get_activities()
+        for activity in activities['time_entry_activities']:
+          if activity['name'] == name:
+            return activity['id']
+        return None
+          
+    def get_issue_id(self, subject):
+      if conf.get("redmine_integration_enabled"):
+        redmine_url = conf.get("redmine_url")
+        redmine_api_key = conf.get("redmine_api_key")
+        redcon = redmine.RedmineConnector(redmine_url, redmine_api_key)
+        issues = redcon.get_issues()
+        for issue in issues['issues']:
+          if issue['subject'] == subject:
+            return issue['id']
+        return None
+        
+    # Redmine callbacks
+    def on_redmine_issue_combo_change(self, combobox):
+      if combobox.get_active() == 0:
+        self.get_widget("time_activity_combo").set_sensitive(False)
+        self.get_widget("time_activity_combo").set_active(-1)
+      else:
+        self.get_widget("time_activity_combo").set_sensitive(True)

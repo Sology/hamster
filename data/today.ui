@@ -451,12 +451,19 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="spacing">5</property>
-                        <property name="homogeneous">True</property>
                         <child>
-                          <object class="GtkLabel" id="issue_label">
+                          <object class="GtkAlignment" id="alignment7">
                             <property name="visible">True</property>
                             <property name="can_focus">False</property>
-                            <property name="label" translatable="yes">Redmine issue:</property>
+                            <property name="xscale">0</property>
+                            <property name="yscale">0</property>
+                            <child>
+                              <object class="GtkLabel" id="issue_label">
+                                <property name="visible">True</property>
+                                <property name="can_focus">False</property>
+                                <property name="label" translatable="yes">Redmine issue:</property>
+                              </object>
+                            </child>
                           </object>
                           <packing>
                             <property name="expand">True</property>
@@ -473,7 +480,6 @@
                               <object class="GtkComboBox" id="issue_combo">
                                 <property name="visible">True</property>
                                 <property name="can_focus">False</property>
-                                <property name="active">2</property>
                               </object>
                             </child>
                           </object>
@@ -484,10 +490,18 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkLabel" id="time_activity_label">
+                          <object class="GtkAlignment" id="alignment8">
                             <property name="visible">True</property>
                             <property name="can_focus">False</property>
-                            <property name="label" translatable="yes">Time activity:</property>
+                            <property name="xscale">0</property>
+                            <property name="yscale">0</property>
+                            <child>
+                              <object class="GtkLabel" id="time_activity_label">
+                                <property name="visible">True</property>
+                                <property name="can_focus">False</property>
+                                <property name="label" translatable="yes">Time activity:</property>
+                              </object>
+                            </child>
                           </object>
                           <packing>
                             <property name="expand">True</property>

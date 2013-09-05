@@ -1,6 +1,7 @@
 # - coding: utf-8 -
 
 # Copyright (C) 2008-2009 Toms Bauģis <toms.baugis at gmail.com>
+# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology (Redmine Integration)
 
 # This file is part of Project Hamster.
 
@@ -89,6 +90,12 @@ class FactRow(object):
 
     def __hash__(self):
         return self.id
+        
+class RedmineFactRow(FactRow):
+  def __init__(self, fact, redmine_issue_id, redmine_activity_id):
+    super(FactRow, self).__init__(fact)
+    self.redmine_issue_id = redmine_issue_id
+    self.redmine_activity_id = redmine_activity_id
 
 class FactTree(gtk.TreeView):
     __gsignals__ = {
