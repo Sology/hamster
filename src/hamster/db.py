@@ -1011,7 +1011,7 @@ class Storage(storage.Storage):
             ids = self.fetchall("select id from facts")
             query = "insert into redmine_facts values(?, -1, -1)"
             for cid in ids:
-              self.execute(query, cid['id'])
+              self.execute(query, (cid['id'],))
             
 
 
