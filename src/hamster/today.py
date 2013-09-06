@@ -523,7 +523,7 @@ class DailyView(object):
         fact = facts[-1]
         runtime.storage.stop_tracking()
         self.last_activity = None
-        if fact != None and conf.get("redmine_integration_enabled") and (fact.delta.days * 24 + fact.delta.seconds / 3600) >= 0.03 and not fact.redmine_issue_id == -1:
+        if fact != None and conf.get("redmine_integration_enabled") and (fact.delta.days * 24 + fact.delta.seconds / 3600) >= 0.016 and not fact.redmine_issue_id == -1:
             redmine_url = conf.get("redmine_url")
             redmine_api_key = conf.get("redmine_api_key")
             redcon = redmine.RedmineConnector(redmine_url, redmine_api_key)
