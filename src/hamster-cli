@@ -4,6 +4,7 @@
 # Copyright (C) 2010 Matías Ribecky <matias at mribecky.com.ar>
 # Copyright (C) 2010-2012 Toms Bauģis <toms.baugis@gmail.com>
 # Copyright (C) 2012 Ted Smith <tedks at cs.umd.edu>
+# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology (Redmine Integration)
 
 # This file is part of Project Hamster.
 
@@ -28,7 +29,7 @@ import re
 import datetime as dt
 
 from hamster import client, reports
-from hamster.lib import Fact, stuff
+from hamster.lib import Fact, RedmineFact, stuff
 
 
 def word_wrap(line, max_len):

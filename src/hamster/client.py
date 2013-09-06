@@ -2,6 +2,7 @@
 
 # Copyright (C) 2007 Patryk Zawadzki <patrys at pld-linux.org>
 # Copyright (C) 2007-2009 Toms Baugis <toms.baugis@gmail.com>
+# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology (Redmine Integration)
 
 # This file is part of Project Hamster.
 
@@ -23,23 +24,37 @@ import datetime as dt
 from calendar import timegm
 import dbus, dbus.mainloop.glib
 import gobject
-from lib import Fact
+from lib import Fact, RedmineFact
 from lib import trophies
 
 
 
 def from_dbus_fact(fact):
     """unpack the struct into a proper dict"""
-    return Fact(fact[4],
-                start_time  = dt.datetime.utcfromtimestamp(fact[1]),
-                end_time = dt.datetime.utcfromtimestamp(fact[2]) if fact[2] else None,
-                description = fact[3],
-                activity_id = fact[5],
-                category = fact[6],
-                tags = fact[7],
-                date = dt.datetime.utcfromtimestamp(fact[8]).date(),
-                delta = dt.timedelta(days = fact[9] // (24 * 60 * 60),
-                                     seconds = fact[9] % (24 * 60 * 60)),
+    if fact[10] == -1 or fact[11] == -1:
+        return Fact(fact[4],
+                    start_time  = dt.datetime.utcfromtimestamp(fact[1]),
+                    end_time = dt.datetime.utcfromtimestamp(fact[2]) if fact[2] else None,
+                    description = fact[3],
+                    activity_id = fact[5],
+                    category = fact[6],
+                    tags = fact[7],
+                    date = dt.datetime.utcfromtimestamp(fact[8]).date(),
+                    delta = dt.timedelta(days = fact[9] // (24 * 60 * 60),
+                                         seconds = fact[9] % (24 * 60 * 60)),
+                    id = fact[0]
+                    )
+    else:
+        return RedmineFact(fact[4],
+            start_time  = dt.datetime.utcfromtimestamp(fact[1]),
+            end_time = dt.datetime.utcfromtimestamp(fact[2]) if fact[2] else None,
+            description = fact[3],
+            activity_id = fact[5],
+            category = fact[6],
+            tags = fact[7],
+            date = dt.datetime.utcfromtimestamp(fact[8]).date(),
+            delta = dt.timedelta(days = fact[9] // (24 * 60 * 60),
+                                 seconds = fact[9] % (24 * 60 * 60)), redmine_issue_id = fact[10], redmine_time_activity_id = fact[11],
             id = fact[0]
             )
 
@@ -180,11 +195,17 @@ class Storage(gobject.GObject):
         end_timestamp = fact.end_time or 0
         if end_timestamp:
             end_timestamp = timegm(end_timestamp.timetuple())
-
-        new_id = self.conn.AddFact(serialized,
+            
+        if isinstance(fact, RedmineFact):
+            new_id = self.conn.AddFact(serialized,
                                    start_timestamp,
                                    end_timestamp,
-                                   temporary_activity)
+                                   temporary_activity, fact.redmine_issue_id, fact.redmine_time_activity_id)
+        else:
+            new_id = self.conn.AddFact(serialized,
+                                   start_timestamp,
+                                   end_timestamp,
+                                   temporary_activity, -1, -1)
 
         # TODO - the parsing should happen just once and preferably here
         # we should feed (serialized_activity, start_time, end_time) into AddFact and others

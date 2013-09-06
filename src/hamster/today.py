@@ -19,6 +19,7 @@
 
 # You should have received a copy of the GNU General Public License
 # along with Project Hamster.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import division # BEHOLD PYTHON3 DIVISION! int / int -> float
 import sys
 import logging
 import datetime as dt
@@ -32,7 +33,7 @@ import redmine
 
 from hamster.configuration import runtime, dialogs, conf, load_ui_file
 from hamster import widgets
-from hamster.lib import Fact, trophies, stuff
+from hamster.lib import Fact, RedmineFact, trophies, stuff
 
 try:
     import wnck
@@ -250,7 +251,7 @@ class DailyView(object):
 
         by_category = {}
         for fact in facts:
-            duration = 24 * 60 * fact.delta.days + fact.delta.seconds / 60
+            duration = 24 * 60 * fact.delta.days + fact.delta.seconds // 60
             by_category[fact.category] = \
                           by_category.setdefault(fact.category, 0) + duration
             self.treeview.add_fact(fact)
@@ -296,15 +297,21 @@ class DailyView(object):
             if conf.get("redmine_integration_enabled"):
               self.get_widget("redmine_frame").show()
               self.get_widget("issue_combo").set_sensitive(False)
-              self.get_widget("activity_combo").set_sensitive(False)
+              self.get_widget("time_activity_combo").set_sensitive(False)
 
             delta = dt.datetime.now() - activity.start_time
-            duration = delta.seconds /  60
+            duration = delta.seconds //  60
 
             if activity.category != _("Unsorted"):
-                self.get_widget("last_activity_name").set_text("%s - %s" % (activity.activity, activity.category))
+                if isinstance(activity, RedmineFact):
+                    self.get_widget("last_activity_name").set_text("%s %s - %s" %(activity.activity, activity.redmine_tag(), activity.category))
+                else:
+                    self.get_widget("last_activity_name").set_text("%s - %s" %(activity.activity, activity.category))
             else:
-                self.get_widget("last_activity_name").set_text(activity.activity)
+                if isinstance(activity, RedmineFact):
+                    self.get_widget("last_activity_name").set_text("%s %s"%(activity.activity, activity.redmine_tag()))
+                else:
+                    self.get_widget("last_activity_name").set_text(activity.activity)
 
             self.get_widget("last_activity_duration").set_text(stuff.format_duration(duration) or _("Just started"))
             self.get_widget("last_activity_description").set_text(activity.description or "")
@@ -480,9 +487,30 @@ class DailyView(object):
 
     def on_switch_activity_clicked(self, widget):
         activity, temporary = self.new_name.get_value()
-
-        fact = Fact(activity,
-                          tags = self.new_tags.get_text().decode("utf8", "replace"))
+        
+        # Redmine integration - if activity is connected with Redmine, it must use new data structures to save additional data
+        fact = None
+        if conf.get("redmine_integration_enabled"):
+            redmine_issue_subject = self.get_widget("issue_combo").get_active_text()
+            if redmine_issue_subject == None or redmine_issue_subject == "None":
+                fact = Fact(activity, tags = self.new_tags.get_text().decode("utf8", "replace"))
+            else:
+                redmine_time_activity_name = self.get_widget("time_activity_combo").get_active_text()
+                if redmine_time_activity_name == None:
+                    dialog = gtk.Dialog("Failed to start tracking", self.window, gtk.DIALOG_MODAL, (gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
+                    label = gtk.Label("Redmine activity cannot be empty!")
+                    dialog.vbox.pack_start(label)
+                    label.show()
+                    dialog.run()
+                    dialog.destroy()
+                    return
+                redcon = redmine.RedmineConnector(conf.get("redmine_url"), conf.get("redmine_api_key"))
+                redmine_issue_id = redcon.get_redmine_issue_id(redmine_issue_subject)
+                redmine_activity_id = redcon.get_redmine_activity_id(redmine_time_activity_name)
+                fact = RedmineFact(activity, redmine_issue_id, redmine_activity_id, tags = self.new_tags.get_text().decode("utf8", "replace"))
+        else:
+            fact = Fact(activity, tags = self.new_tags.get_text().decode("utf8", "replace"))
+            
         if not fact.activity:
             return
 
@@ -491,8 +519,17 @@ class DailyView(object):
         self.new_tags.set_text("")
 
     def on_stop_tracking_clicked(self, widget):
+        facts = runtime.storage.get_todays_facts()
+        fact = facts[-1]
         runtime.storage.stop_tracking()
         self.last_activity = None
+        if fact != None and conf.get("redmine_integration_enabled") and (fact.delta.days * 24 + fact.delta.seconds / 3600) >= 0.03 and not fact.redmine_issue_id == -1:
+            redmine_url = conf.get("redmine_url")
+            redmine_api_key = conf.get("redmine_api_key")
+            redcon = redmine.RedmineConnector(redmine_url, redmine_api_key)
+            redcon.add_time_entry(fact.redmine_issue_id, round((fact.delta.days * 24 + fact.delta.seconds / 3600), 2), fact.redmine_time_activity_id, fact.activity)
+        self.fill_issues_combo()
+        self.fill_time_activities_combo()
 
     def on_window_configure_event(self, window, event):
         self.treeview.fix_row_heights()
@@ -577,28 +614,6 @@ class DailyView(object):
       else:
         combomodel = None
       self.get_widget("time_activity_combo").set_model(combomodel)
-    
-    def get_activity_id(self, name):
-      if conf.get("redmine_integration_enabled"):
-        redmine_url = conf.get("redmine_url")
-        redmine_api_key = conf.get("redmine_api_key")
-        redcon = redmine.RedmineConnector(redmine_url, redmine_api_key)
-        activities = redcon.get_activities()
-        for activity in activities['time_entry_activities']:
-          if activity['name'] == name:
-            return activity['id']
-        return None
-          
-    def get_issue_id(self, subject):
-      if conf.get("redmine_integration_enabled"):
-        redmine_url = conf.get("redmine_url")
-        redmine_api_key = conf.get("redmine_api_key")
-        redcon = redmine.RedmineConnector(redmine_url, redmine_api_key)
-        issues = redcon.get_issues()
-        for issue in issues['issues']:
-          if issue['subject'] == subject:
-            return issue['id']
-        return None
         
     # Redmine callbacks
     def on_redmine_issue_combo_change(self, combobox):

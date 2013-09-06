@@ -4,6 +4,7 @@
 # Copyright (C) 2008 Nathan Samson <nathansamson at gmail dot com>
 # Copyright (C) 2008 Giorgos Logiotatidis  <seadog at sealabs dot net>
 # Copyright (C) 2012 Ted Smith <tedks at cs.umd.edu>
+# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology (Redmine Integration)
 
 # This file is part of Project Hamster.
 
@@ -29,7 +30,7 @@ import re
 from string import Template
 
 from configuration import runtime
-from lib import stuff, trophies
+from lib import stuff, trophies, RedmineFact
 from lib.i18n import C_
 try:
     import json
@@ -126,6 +127,7 @@ class ICalWriter(ReportWriter):
 
         if fact.category == _("Unsorted"):
             fact.category = None
+            
 
         self.file.write("""BEGIN:VEVENT
 CATEGORIES:%(category)s
@@ -133,6 +135,8 @@ DTSTART:%(start_time)s
 DTEND:%(end_time)s
 SUMMARY:%(activity)s
 DESCRIPTION:%(description)s
+REDMINEISSUE:%(redmine_issue_id)s
+REDMINEACTIVITY:%(redmine_time_activity_id)s
 END:VEVENT
 """ % dict(fact))
 
@@ -157,7 +161,10 @@ class TSVWriter(ReportWriter):
                    # column title in the TSV export format
                    _("description"),
                    # column title in the TSV export format
-                   _("tags")]
+                   _("tags"),
+                   _("redmine_issue"),
+                   _("redmine_activity")
+        ]
         self.csv_writer.writerow([h.encode('utf-8') for h in headers])
 
     def _write_fact(self, fact):
@@ -168,7 +175,8 @@ class TSVWriter(ReportWriter):
                                   fact.delta,
                                   fact.category,
                                   fact.description,
-                                  fact.tags])
+                                  fact.tags, fact.redmine_issue_id, fact.redmine_time_activity_id
+            ])
     def _finish(self, facts):
         pass
 
@@ -187,6 +195,8 @@ class XMLWriter(ReportWriter):
         activity.setAttribute("category", fact.category)
         activity.setAttribute("description", fact.description)
         activity.setAttribute("tags", fact.tags)
+        activity.setAttribute("redmine_issue", fact.redmine_issue_id)
+        activity.setAttribute("redmine_activity", fact.redmine_time_activity_id)
         self.activity_list.appendChild(activity)
 
     def _finish(self, facts):

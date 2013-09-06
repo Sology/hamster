@@ -24,7 +24,7 @@ import gtk, gobject
 import cairo
 import datetime as dt
 
-from ..lib import stuff, graphics
+from ..lib import stuff, graphics, RedmineFact, Fact
 from tags import Tag
 
 import pango
@@ -90,12 +90,24 @@ class FactRow(object):
 
     def __hash__(self):
         return self.id
-        
+
 class RedmineFactRow(FactRow):
-  def __init__(self, fact, redmine_issue_id, redmine_activity_id):
-    super(FactRow, self).__init__(fact)
-    self.redmine_issue_id = redmine_issue_id
-    self.redmine_activity_id = redmine_activity_id
+    def __init__(self, fact):
+        FactRow.__init__(self, fact)
+        self.redmine_issue_id = fact.redmine_issue_id
+        self.redmine_time_activity_id = fact.redmine_time_activity_id
+    
+    def __eq__(self, other):
+      return isinstance(other, RedmineFactRow) and other.id == self.id \
+           and other.name == self.name \
+           and other.category == self.category \
+           and other.description == self.description \
+           and other.tags == self.tags \
+           and other.start_time == self.start_time \
+           and other.end_time == self.end_time \
+           and other.delta == self.delta \
+           and other.redmine_issue_id == self.redmine_issue_id \
+           and other.redmine_time_activity_id == self.redmine_time_activity_id
 
 class FactTree(gtk.TreeView):
     __gsignals__ = {
@@ -191,7 +203,10 @@ class FactTree(gtk.TreeView):
 
 
     def add_fact(self, fact):
-        fact = FactRow(fact)
+        if isinstance(fact, RedmineFact):
+            fact = RedmineFactRow(fact)
+        else:
+            fact = FactRow(fact)
         self.update_longest_dimensions(fact)
         self.new_rows.append(fact)
 
@@ -577,7 +592,13 @@ class FactCellRenderer(gtk.GenericCellRenderer):
 
         self.activity_label.color = text_color
         self.activity_label.width = None
-        self.activity_label.text = stuff.escape_pango(fact.name)
+        if isinstance(fact, RedmineFactRow):
+            text = fact.name
+            text += " "
+            text += fact.fact.redmine_tag()
+            self.activity_label.text = stuff.escape_pango(text)
+        else:
+            self.activity_label.text = stuff.escape_pango(fact.name)
 
         # if activity label does not fit, we will shrink it
         if self.activity_label.width > cell_width - category_width:

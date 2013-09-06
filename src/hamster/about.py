@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2007, 2008 Toms Bauģis <toms.baugis at gmail.com>
+# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology (Redmine Integration)s
 
 # This file is part of Project Hamster.
 
@@ -50,7 +51,8 @@ class About(object):
         about.set_authors(["Toms Bauģis <toms.baugis@gmail.com>",
                            "Patryk Zawadzki <patrys@pld-linux.org>",
                            "Pēteris Caune <cuu508@gmail.com>",
-                           "Juanje Ojeda <jojeda@emergya.es>"])
+                           "Juanje Ojeda <jojeda@emergya.es>",
+                           "Piotr Żurek (Sology) <piotr@sology.eu>"])
         about.set_artists(["Kalle Persson <kalle@kallepersson.se>"])
 
         about.set_translator_credits(_("translator-credits"))

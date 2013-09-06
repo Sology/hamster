@@ -2,6 +2,7 @@
 
 # Copyright (C) 2007 Patryk Zawadzki <patrys at pld-linux.org>
 # Copyright (C) 2007-2012 Toms Baugis <toms.baugis@gmail.com>
+# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology (Redmine Integration)
 
 # This file is part of Project Hamster.
 
@@ -19,7 +20,7 @@
 # along with Project Hamster.  If not, see <http://www.gnu.org/licenses/>.
 
 import datetime as dt
-from lib import Fact
+from lib import Fact, RedmineFact
 
 class Storage(object):
     def run_fixtures(self):
@@ -37,12 +38,17 @@ class Storage(object):
 
 
     # facts
-    def add_fact(self, fact, start_time, end_time, temporary = False):
-        fact = Fact(fact, start_time = start_time, end_time = end_time)
+    def add_fact(self, fact, start_time, end_time, temporary = False, redmine_issue = -1, redmine_activity = -1):
+        newfact = None
+        if redmine_issue == -1:
+            newfact = Fact(fact, start_time = start_time, end_time = end_time)
+        else:
+            newfact = RedmineFact(fact, start_time = start_time, end_time = end_time, redmine_issue_id = redmine_issue, redmine_time_activity_id = redmine_activity)
+        fact = newfact
         start_time = fact.start_time or dt.datetime.now().replace(second = 0, microsecond = 0)
 
         self.start_transaction()
-        result = self.__add_fact(fact.serialized_name(), start_time, end_time, temporary)
+        result = self.__add_fact(fact.serialized_name(), start_time, end_time, temporary, redmine_issue, redmine_activity)
         self.end_transaction()
 
         if result:
@@ -70,6 +76,7 @@ class Storage(object):
         if facts and not facts[-1]['end_time']:
             self.__touch_fact(facts[-1], end_time)
             self.facts_changed()
+        
 
 
     def remove_fact(self, fact_id):

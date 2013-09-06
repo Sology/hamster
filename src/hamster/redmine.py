@@ -92,7 +92,6 @@ class RedmineConnector:
     conn.putheader("Content-Type", "application/json")
     conn.putheader("Content-Length", len(timeentryjson))
     conn.endheaders()
-    print "Sending: " + timeentryjson
     conn.send(timeentryjson)
     resp = conn.getresponse()
     if resp.status == 201:
@@ -117,3 +116,17 @@ class RedmineConnector:
       return activitylist
     else:
       raise RedmineConnectionException("HTTP replied: " + str(resp.status) + " " + resp.reason)
+      
+  def get_redmine_activity_id(self, name):
+    activities = self.get_activities()
+    for activity in activities['time_entry_activities']:
+      if activity['name'] == name:
+        return activity['id']
+    return None
+    
+  def get_redmine_issue_id(self, subject):
+    issues = self.get_issues()
+    for issue in issues['issues']:
+      if issue['subject'] == subject:
+        return issue['id']
+    return None

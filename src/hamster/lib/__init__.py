@@ -137,3 +137,37 @@ class Fact(object):
         if self.end_time:
             time = "%s - %s" % (time, self.end_time.strftime("%H:%M"))
         return "%s %s" % (time, self.serialized_name())
+
+# A fact extended with Redmine additional information
+class RedmineFact(Fact):
+     def __init__(self, activity,  redmine_issue_id, redmine_time_activity_id, category = "", description = "", tags = "", start_time = None, end_time = None, id = None, delta = None, date = None, activity_id = None):
+            Fact.__init__(self, activity, category, description, tags, start_time, end_time, id, delta, date, activity_id)
+            self.redmine_issue_id = redmine_issue_id
+            self.redmine_time_activity_id = redmine_time_activity_id
+  
+     def __iter__(self):
+           keys = {
+               'id': int(self.id) if self.id else "",
+               'activity': self.activity,
+               'category': self.category,
+               'description': self.description,
+               'tags': [tag.encode("utf-8").strip() for tag in self.tags],
+               'date': calendar.timegm(self.date.timetuple()) if self.date else "",
+               'start_time': self.start_time if isinstance(self.start_time, basestring) else calendar.timegm(self.start_time.timetuple()),
+               'end_time': self.end_time if isinstance(self.end_time, basestring) else calendar.timegm(self.end_time.timetuple()) if self.end_time else "",
+               'delta': self.delta.seconds + self.delta.days * 24 * 60 * 60 if self.delta else "", #duration in seconds
+               'redmine_issue_id': self.redmine_issue_id,
+               'redmine_time_activity_id': self.redmine_time_activity_id
+           }
+           return iter(keys.items())
+     
+     def redmine_tag(self):
+         return "{Redmine: Issue #%d, Activity #%d}" % (self.redmine_issue_id, self.redmine_time_activity_id)
+     
+     def __str__(self):
+          time = ""
+          if self.start_time:
+              time = self.start_time.strftime("%d-%m-%Y %H:%M")
+          if self.end_time:
+              time = "%s - %s" % (time, self.end_time.strftime("%H:%M"))
+          return "%s %s %s" % (time, self.serialized_name(), self.redmine_tag())

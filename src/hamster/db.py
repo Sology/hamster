@@ -2,6 +2,7 @@
 
 # Copyright (C) 2007-2009, 2012 Toms Bauģis <toms.baugis at gmail.com>
 # Copyright (C) 2007 Patryk Zawadzki <patrys at pld-linux.org>
+# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology (Redmine Integration)
 
 # This file is part of Project Hamster.
 
@@ -44,7 +45,7 @@ except ImportError:
     print "Could not import gio - requires pygobject. File monitoring will be disabled"
     gio = None
 
-from lib import Fact
+from lib import Fact, RedmineFact
 try:
     from lib import trophies
 except:
@@ -363,12 +364,15 @@ class Storage(storage.Storage):
                           a.description as description,
                           b.name AS name, b.id as activity_id,
                           coalesce(c.name, ?) as category, coalesce(c.id, -1) as category_id,
-                          e.name as tag
+                          e.name as tag,
+                          f.redmine_issue as redmine_issue,
+                          f.redmine_activity as redmine_activity
                      FROM facts a
                 LEFT JOIN activities b ON a.activity_id = b.id
                 LEFT JOIN categories c ON b.category_id = c.id
                 LEFT JOIN fact_tags d ON d.fact_id = a.id
                 LEFT JOIN tags e ON e.id = d.tag_id
+                LEFT JOIN redmine_facts f ON f.id = a.id
                     WHERE a.id = ?
                  ORDER BY e.name
         """
@@ -389,7 +393,7 @@ class Storage(storage.Storage):
             # we need dict so we can modify it (sqlite.Row is read only)
             # in python 2.5, sqlite does not have keys() yet, so we hardcode them (yay!)
             keys = ["id", "start_time", "end_time", "description", "name",
-                    "activity_id", "category", "tag"]
+                    "activity_id", "category", "tag", "redmine_issue", "redmine_activity"]
             grouped_fact = dict([(key, grouped_fact[key]) for key in keys])
 
             grouped_fact["tags"] = [ft["tag"] for ft in fact_tags if ft["tag"]]
@@ -516,10 +520,14 @@ class Storage(storage.Storage):
                              (start_time, fact["id"]))
 
 
-    def __add_fact(self, serialized_fact, start_time, end_time = None, temporary = False):
-        fact = Fact(serialized_fact,
+    def __add_fact(self, serialized_fact, start_time, end_time = None, temporary = False, redmine_issue = -1, redmine_activity = -1):
+        fact = None
+        if redmine_issue == -1:
+            fact = Fact(serialized_fact,
                     start_time = start_time,
                     end_time = end_time)
+        else:
+            fact = RedmineFact(serialized_fact, redmine_issue_id = redmine_issue, redmine_time_activity_id = redmine_activity, start_time = start_time, end_time = end_time)
 
         start_time = start_time or fact.start_time
         end_time = end_time or fact.end_time
@@ -614,6 +622,15 @@ class Storage(storage.Storage):
         self.execute(insert, (activity_id, start_time, end_time, fact.description))
 
         fact_id = self.__last_insert_rowid()
+        
+        # Redmine data
+        
+        if isinstance(fact, RedmineFact):
+          insert = """INSERT INTO redmine_facts VALUES(?, ?, ?)"""
+          self.execute(insert, (fact_id, fact.redmine_issue_id, fact.redmine_time_activity_id))
+        else:
+          insert = """INSERT INTO redmine_facts VALUES(?, -1, -1)"""
+          self.execute(insert, (fact_id,))
 
         #now link tags
         insert = ["insert into fact_tags(fact_id, tag_id) values(?, ?)"] * len(tags)
@@ -660,12 +677,13 @@ class Storage(storage.Storage):
                           a.description as description,
                           b.name AS name, b.id as activity_id,
                           coalesce(c.name, ?) as category,
-                          e.name as tag
+                          e.name as tag, f.redmine_issue as redmine_issue, f.redmine_activity as redmine_activity
                      FROM facts a
                 LEFT JOIN activities b ON a.activity_id = b.id
                 LEFT JOIN categories c ON b.category_id = c.id
                 LEFT JOIN fact_tags d ON d.fact_id = a.id
                 LEFT JOIN tags e ON e.id = d.tag_id
+                LEFT JOIN redmine_facts f ON f.id = a.id
                     WHERE (a.end_time >= ? OR a.end_time IS NULL) AND a.start_time <= ?
         """
 
@@ -735,7 +753,7 @@ class Storage(storage.Storage):
 
     def __remove_fact(self, fact_id):
         statements = ["DELETE FROM fact_tags where fact_id = ?",
-                      "DELETE FROM facts where id = ?"]
+                      "DELETE FROM facts where id = ?", "DELETE FROM redmine_facts where id = ?"]
         self.execute(statements, [(fact_id,)] * 2)
 
         self.__remove_index([fact_id])
@@ -859,12 +877,13 @@ class Storage(storage.Storage):
                               a.description as description,
                               b.name AS name, b.id as activity_id,
                               coalesce(c.name, ?) as category,
-                              e.name as tag
+                              e.name as tag, f.redmine_issue as redmine_issue, f.redmine_activity as redmine_activity
                          FROM facts a
                     LEFT JOIN activities b ON a.activity_id = b.id
                     LEFT JOIN categories c ON b.category_id = c.id
                     LEFT JOIN fact_tags d ON d.fact_id = a.id
                     LEFT JOIN tags e ON e.id = d.tag_id
+                    LEFT JOIN redmine_facts f ON f.id = a.id
                         WHERE a.id in (%s)
                      ORDER BY a.id
             """ % rebuild_ids
@@ -962,7 +981,7 @@ class Storage(storage.Storage):
 
         """upgrade DB to hamster version"""
         version = self.fetchone("SELECT version FROM version")["version"]
-        current_version = 9
+        current_version = 10
 
         if version < 8:
             # working around sqlite's utf-f case sensitivity (bug 624438)
@@ -985,6 +1004,15 @@ class Storage(storage.Storage):
             # adding full text search
             self.execute("""CREATE VIRTUAL TABLE fact_index
                                            USING fts3(id, name, category, description, tag)""")
+            
+        if version < 10:
+            # new Redmine facts table
+            self.execute("""CREATE TABLE redmine_facts(id INTEGER NOT NULL, redmine_issue INTEGER, redmine_activity INTEGER)""")
+            ids = self.fetchall("select id from facts")
+            query = "insert into redmine_facts values(?, -1, -1)"
+            for cid in ids:
+              self.execute(query, cid['id'])
+            
 
 
         # at the happy end, update version number
