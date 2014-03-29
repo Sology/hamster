@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology
+# Copyright (C) 2013-2014 Piotr Żurek <piotr at sology.eu> for Sology
 
 # This file contains Redmine Integration specific functions for Project Hamster
 
@@ -40,15 +40,22 @@ class RedmineConnector:
     parsed = urlparse.urlparse(url)
     self.server = parsed.hostname
     self.path = parsed.path
+    self.scheme = parsed.scheme
     if self.path == "":
       self.path = "/"
     self.port = parsed.port
     if self.port == None:
-      self.port = 80
+      if self.scheme == "https":
+        self.port = 443
+      else:
+        self.port = 80
     self.apikey = key
   
   def get_current_user_id(self):
-    conn = httplib.HTTPConnection(self.server, self.port)
+    if self.scheme == "https":
+      conn = httplib.HTTPSConnection(self.server, self.port, timeout=10)
+    else:
+      conn = httplib.HTTPConnection(self.server, self.port, timeout=10)
     conn.putrequest("GET", self.path + "users/current.json")
     conn.putheader("X-Redmine-API-Key", self.apikey)
     conn.endheaders()
@@ -70,7 +77,10 @@ class RedmineConnector:
       
   def get_issues(self):
     userid = self.get_current_user_id()
-    conn = httplib.HTTPConnection(self.server, self.port)
+    if self.scheme == "https":
+      conn = httplib.HTTPSConnection(self.server, self.port, timeout=10)
+    else:
+      conn = httplib.HTTPConnection(self.server, self.port, timeout=10)
     conn.putrequest("GET", self.path + "issues.json?assigned_to_id=" + str(userid))
     conn.putheader("X-Redmine-API-Key", self.apikey)
     conn.endheaders()
@@ -83,10 +93,30 @@ class RedmineConnector:
     else:
       raise RedmineConnectionException("HTTP replied: " + str(resp.status) + " " + resp.reason)
       
+  def get_arbitrary_issue_data(self, issue):
+    if self.scheme == "https":
+      conn = httplib.HTTPSConnection(self.server, self.port, timeout=10)
+    else:
+      conn = httplib.HTTPConnection(self.server, self.port, timeout=10)
+    conn.putrequest("GET", self.path + "issues/" + str(issue) + ".json")
+    conn.putheader("X-Redmine-API-Key", self.apikey)
+    conn.endheaders()
+    conn.send("")
+    resp = conn.getresponse()
+    if resp.status == 200:
+      issuedata = json.load(resp)
+      conn.close()
+      return issuedata
+    else:
+      raise RedmineConnectionException("HTTP replied: " + str(resp.status) + " " + resp.reason)
+
   def add_time_entry(self, issue, hours, activity, comments):
     timeentryhash = {'time_entry' : {'issue_id' : issue, 'hours' : hours, 'activity_id' : activity, 'comments' : comments, 'spent_on' : datetime.date.today().strftime('%Y-%m-%d')}}
     timeentryjson = json.dumps(timeentryhash)
-    conn = httplib.HTTPConnection(self.server, self.port)
+    if self.scheme == "https":
+      conn = httplib.HTTPSConnection(self.server, self.port, timeout=10)
+    else:
+      conn = httplib.HTTPConnection(self.server, self.port, timeout=10)
     conn.putrequest("POST", self.path + "time_entries.json")
     conn.putheader("X-Redmine-API-Key", self.apikey)
     conn.putheader("Content-Type", "application/json")
@@ -104,7 +134,10 @@ class RedmineConnector:
        
   def get_activities(self):
     userid = self.get_current_user_id()
-    conn = httplib.HTTPConnection(self.server, self.port)
+    if self.scheme == "https":
+      conn = httplib.HTTPSConnection(self.server, self.port, timeout=10)
+    else:
+      conn = httplib.HTTPConnection(self.server, self.port, timeout=10)
     conn.putrequest("GET", self.path + "enumerations/time_entry_activities.json")
     conn.putheader("X-Redmine-API-Key", self.apikey)
     conn.endheaders()

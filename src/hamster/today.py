@@ -3,7 +3,7 @@
 
 # Copyright (C) 2009-2012 Toms Bauģis <toms.baugis at gmail.com>
 # Copyright (C) 2009 Patryk Zawadzki <patrys at pld-linux.org>
-# Copyright (C) 2013 Piotr Żurek <piotr at sology.eu> for Sology (Redmine Integration)
+# Copyright (C) 2013-2014 Piotr Żurek <piotr at sology.eu> for Sology (Redmine Integration)
 
 # This file is part of Project Hamster.
 
@@ -178,6 +178,9 @@ class DailyView(object):
             # Signal for Redmine issue combo
             self.get_widget("issue_combo").connect("changed", self.on_redmine_issue_combo_change)
             
+            # Signal for Redmine arbitrary issue id entry
+            self.get_widget("arbitrary_issue_id_entry").connect("changed", self.on_redmine_arbitrary_issue_id_entry_change)
+            
             # Redmine combos additional setup
             cell = gtk.CellRendererText()
             self.get_widget("issue_combo").pack_start(cell, True)
@@ -287,6 +290,8 @@ class DailyView(object):
         activity = self.last_activity
         #sets all the labels and everything as necessary
         self.get_widget("stop_tracking").set_sensitive(activity != None)
+        arbitrary_issue_id = self.get_widget("arbitrary_issue_id_entry").get_text()
+        active_activity = self.get_widget("time_activity_combo").get_active()
 
 
         if activity:
@@ -298,6 +303,10 @@ class DailyView(object):
               self.get_widget("redmine_frame").show()
               self.get_widget("issue_combo").set_sensitive(False)
               self.get_widget("time_activity_combo").set_sensitive(False)
+              self.get_widget("arbitrary_issue_id_entry").set_sensitive(False)
+              if arbitrary_issue_id != None:
+                self.get_widget("arbitrary_issue_id_entry").set_text(arbitrary_issue_id)
+                self.get_widget("time_activity_combo").set_active(active_activity)
 
             delta = dt.datetime.now() - activity.start_time
             duration = delta.seconds //  60
@@ -335,9 +344,12 @@ class DailyView(object):
               self.get_widget("time_activity_combo").set_sensitive(True)
               if self.get_widget("issue_combo").get_active() == -1 or self.get_widget("issue_combo").get_active() == 0:
                 self.fill_issues_combo()
+                self.get_widget("arbitrary_issue_id_entry").set_sensitive(True)
               if self.get_widget("time_activity_combo").get_active() == -1 or self.get_widget("time_activity_combo").get_active() == 0:
                 self.fill_time_activities_combo()
-
+              if arbitrary_issue_id != None:
+                self.get_widget("arbitrary_issue_id_entry").set_text(arbitrary_issue_id)
+                self.get_widget("time_activity_combo").set_active(active_activity)
 
     def delete_selected(self):
         fact = self.treeview.get_selected_fact()
@@ -493,7 +505,33 @@ class DailyView(object):
         if conf.get("redmine_integration_enabled"):
             redmine_issue_subject = self.get_widget("issue_combo").get_active_text()
             if redmine_issue_subject == None or redmine_issue_subject == "None":
+              arbitrary_issue_id = self.get_widget("arbitrary_issue_id_entry").get_text()
+              if arbitrary_issue_id == "" or arbitrary_issue_id == None:
                 fact = Fact(activity, tags = self.new_tags.get_text().decode("utf8", "replace"))
+              else:
+                redcon = redmine.RedmineConnector(conf.get("redmine_url"), conf.get("redmine_api_key"))
+                try:
+                  redcon.get_arbitrary_issue_data(arbitrary_issue_id)
+                  arbitrary_issue_id = int(arbitrary_issue_id)
+                  redmine_time_activity_name = self.get_widget("time_activity_combo").get_active_text()
+                  if redmine_time_activity_name == None:
+                    dialog = gtk.Dialog("Failed to start tracking", self.window, gtk.DIALOG_MODAL, (gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
+                    label = gtk.Label("Redmine activity cannot be empty!")
+                    dialog.vbox.pack_start(label)
+                    label.show()
+                    dialog.run()
+                    dialog.destroy()
+                    return
+                  redmine_activity_id = redcon.get_redmine_activity_id(redmine_time_activity_name)
+                  fact = RedmineFact(activity, arbitrary_issue_id, redmine_activity_id, tags = self.new_tags.get_text().decode("utf8", "replace"))
+                except redmine.RedmineConnectionException:
+                  dialog = gtk.Dialog("Failed to start tracking", self.window, gtk.DIALOG_MODAL, (gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
+                  label = gtk.Label("Invalid arbitrary issue number!")
+                  dialog.vbox.pack_start(label)
+                  label.show()
+                  dialog.run()
+                  dialog.destroy()
+                  return
             else:
                 redmine_time_activity_name = self.get_widget("time_activity_combo").get_active_text()
                 if redmine_time_activity_name == None:
@@ -617,8 +655,24 @@ class DailyView(object):
         
     # Redmine callbacks
     def on_redmine_issue_combo_change(self, combobox):
+      redmine_url = conf.get("redmine_url")
+      redmine_api_key = conf.get("redmine_api_key")
+      redcon = redmine.RedmineConnector(redmine_url, redmine_api_key)
       if combobox.get_active() == 0:
         self.get_widget("time_activity_combo").set_sensitive(False)
         self.get_widget("time_activity_combo").set_active(-1)
+        self.get_widget("arbitrary_issue_id_entry").set_sensitive(True)
+        self.get_widget("arbitrary_issue_id_entry").set_text("")
       else:
         self.get_widget("time_activity_combo").set_sensitive(True)
+        self.get_widget("arbitrary_issue_id_entry").set_sensitive(False)
+        
+    def on_redmine_arbitrary_issue_id_entry_change(self, entry):
+      if entry.get_text() == "" or entry.get_text() == None:
+        self.get_widget("time_activity_combo").set_sensitive(False)
+        self.get_widget("time_activity_combo").set_active(-1)
+        self.get_widget("issue_combo").set_sensitive(True)
+      else:
+        self.get_widget("time_activity_combo").set_sensitive(True)
+        self.get_widget("issue_combo").set_sensitive(False)
+        self.get_widget("issue_combo").set_active(0)
